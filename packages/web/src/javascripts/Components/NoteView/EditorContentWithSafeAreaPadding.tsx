@@ -24,7 +24,7 @@ export const EditorContentWithSafeAreaPadding = forwardRef(function EditorConten
       className={classNames(
         ElementIds.EditorContent,
         'z-editor-content overflow-auto sm:[&>*]:mx-[var(--editor-margin)] sm:[&>*]:max-w-[var(--editor-max-width)]',
-        hasBottomInset && isNoteLocked && 'pb-safe-bottom',
+        hasBottomInset && 'pb-safe-bottom',
       )}
       style={
         {
