@@ -1,0 +1,152 @@
+🧩 TỔNG QUAN HỆ THỐNG
+less
+Sao chép
+Chỉnh sửa
+INTERNET
+   │
+[MikroTik RB1100x4] 
+   │ ether10 (VLAN trunk)
+   ▼
+[Switch PoE TP-Link SG2428P]  ← Gần phòng thiết bị mạng
+ ├─ Port 1: Trunk từ MikroTik
+ ├─ Port 2: OC200 Controller (Access VLAN 20)
+ ├─ Port 3–8: EAP610 (PoE + VLAN trunk)
+   │
+   ▼
+[Cisco 3750G]  ← Trung chuyển LAN
+   │
+[TP-Link TL-SG1024]  ← Các máy tính & thiết bị văn phòng
+🌐 PHÂN VÙNG VLAN
+SSID	VLAN ID	Dải IP	Mục đích
+NhanVien-WiFi	20	172.16.20.0/24	Nhân viên, OC200
+Khach-WiFi	30	172.16.21.0/24	Khách (Captive Portal)
+CRM-IOT	40	172.16.22.0/24	Nội bộ (ẩn nếu cần)
+
+🔧 1. CẤU HÌNH TRÊN MIKROTIK RB1100x4
+Tạo các VLAN interface trên ether10:
+bash
+Sao chép
+Chỉnh sửa
+/interface vlan
+add name=vlan20 interface=ether10-Lable6 vlan-id=20
+add name=vlan30 interface=ether10-Lable6 vlan-id=30
+add name=vlan40 interface=ether10-Lable6 vlan-id=40
+Cấp IP cho từng VLAN:
+bash
+Sao chép
+Chỉnh sửa
+/ip address
+add address=172.16.20.1/24 interface=vlan20
+add address=172.16.21.1/24 interface=vlan30
+add address=172.16.22.1/24 interface=vlan40
+DHCP Server riêng cho từng VLAN:
+bash
+Sao chép
+Chỉnh sửa
+/ip pool
+add name=dhcp_vlan20 ranges=172.16.20.10-172.16.20.250
+add name=dhcp_vlan30 ranges=172.16.21.10-172.16.21.250
+add name=dhcp_vlan40 ranges=172.16.22.10-172.16.22.250
+
+/ip dhcp-server
+add name=dhcp20 interface=vlan20 address-pool=dhcp_vlan20
+add name=dhcp30 interface=vlan30 address-pool=dhcp_vlan30
+add name=dhcp40 interface=vlan40 address-pool=dhcp_vlan40
+
+/ip dhcp-server network
+add address=172.16.20.0/24 gateway=172.16.20.1 dns-server=172.16.20.1,8.8.8.8
+add address=172.16.21.0/24 gateway=172.16.21.1 dns-server=172.16.21.1,8.8.8.8
+add address=172.16.22.0/24 gateway=172.16.22.1 dns-server=172.16.22.1,8.8.8.8
+Bật DHCP Snooping:
+bash
+Sao chép
+Chỉnh sửa
+/interface bridge settings
+set use-ip-firewall=yes
+/ip dhcp-server set dhcp20 dhcp-snooping=yes
+/ip dhcp-server set dhcp30 dhcp-snooping=yes
+/ip dhcp-server set dhcp40 dhcp-snooping=yes
+Tách mạng giữa VLAN (isolation):
+bash
+Sao chép
+Chỉnh sửa
+/ip firewall filter
+# Cho phép LAN truy cập router
+add chain=input action=accept src-address=172.16.20.0/24
+add chain=input action=accept src-address=172.16.21.0/24
+add chain=input action=accept src-address=172.16.22.0/24
+
+# Cấm VLAN30 (Khách) truy cập VLAN20 + 40
+add chain=forward action=drop src-address=172.16.21.0/24 dst-address=172.16.20.0/24
+add chain=forward action=drop src-address=172.16.21.0/24 dst-address=172.16.22.0/24
+🧮 2. CẤU HÌNH SWITCH POE TP-LINK SG2428P
+Port cấu hình chi tiết:
+Port	Thiết bị	Cấu hình VLAN
+1	MikroTik	Trunk (VLAN 20,30,40)
+2	OC200	Access VLAN 20
+3-8	EAP610	Trunk (20,30,40)
+9-28	Dự phòng LAN	Access VLAN 20
+
+Cách cấu hình trên SG2428P (qua Web GUI):
+
+VLAN Management → 802.1Q VLAN → VLAN Config:
+
+Tạo VLAN 20, 30, 40
+
+Port Config:
+
+Port 1: Trunk, Tagged VLAN 20/30/40
+
+Port 2: Access VLAN 20 (OC200)
+
+Port 3–8: Trunk, Tagged VLAN 20/30/40
+
+Port 9–28: Access VLAN 20 (máy tính nội bộ nếu cần)
+
+📡 3. CẤU HÌNH OMADA CONTROLLER (OC200)
+Gán SSID theo VLAN:
+SSID: NhanVien-WiFi → VLAN 20
+
+SSID: Khach-WiFi → VLAN 30 → Bật Captive Portal + Rate Limit
+
+SSID: CRM-IOT → VLAN 40 → Ẩn SSID nếu muốn
+
+WiFi Optimization:
+Bật Band Steering
+
+Bật Fast Roaming
+
+Bật Load Balancing
+
+Tùy chọn giới hạn thiết bị/SSID (Client Limit)
+
+Quota Control (Giới hạn sử dụng WiFi):
+Dùng Omada Voucher portal + thiết lập thời lượng
+
+Hoặc giới hạn băng thông theo user (SSID: Guest):
+
+Upload/Download Limit: ví dụ 2 Mbps/2 Mbps
+
+🧠 GỢI Ý VỊ TRÍ ĐẶT THIẾT BỊ
+RB1100x4: Tủ rack trung tâm
+
+Switch PoE SG2428P: Gần tủ mạng / phòng thiết bị (nơi tập trung dây mạng)
+
+OC200: Cắm trực tiếp cổng access VLAN 20 (có thể gần switch PoE)
+
+EAP610: Lắp tại các khu vực:
+
+EAP610-1: Phòng làm việc chung (200m²)
+
+EAP610-2: Phòng họp lớn (30m²)
+
+EAP610-3: Phòng họp nhỏ hoặc hành lang
+
+✅ KẾT LUẬN
+Hệ thống chia VLAN rõ ràng, tối ưu luồng mạng nội bộ
+
+Omada quản lý WiFi tập trung, giới hạn SSID khách
+
+MikroTik tách mạng an toàn, DHCP theo VLAN
+
+Switch PoE là trung tâm WiFi, cấp nguồn và chuyển mạch mạnh mẽ
